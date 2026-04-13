@@ -238,6 +238,86 @@ SIGNAL_CATALOG = {
         "severity": "medium",
         "family": "Maturite Dirigeant",
     },
+
+    # =========================================================================
+    # --- Infogreffe signals (actes RCS deposés) ---
+    # =========================================================================
+    "infogreffe_nouveau_dirigeant": {
+        "label": "Nomination d'un nouveau dirigeant (acte Infogreffe)",
+        "source": "Infogreffe",
+        "source_url": "https://www.infogreffe.fr",
+        "dimension": "maturite_dirigeant",
+        "points": 18,
+        "severity": "high",
+        "family": "Maturite Dirigeant",
+    },
+    "infogreffe_capital_change": {
+        "label": "Modification de capital deposée (Infogreffe)",
+        "source": "Infogreffe",
+        "source_url": "https://www.infogreffe.fr",
+        "dimension": "signaux_patrimoniaux",
+        "points": 15,
+        "severity": "high",
+        "family": "Patrimoine & Transmission",
+    },
+    "infogreffe_fusion_absorption": {
+        "label": "Acte de fusion / absorption depose (Infogreffe)",
+        "source": "Infogreffe",
+        "source_url": "https://www.infogreffe.fr",
+        "dimension": "consolidation_sectorielle",
+        "points": 22,
+        "severity": "high",
+        "family": "Consolidation Sectorielle",
+    },
+    "infogreffe_transfert_siege": {
+        "label": "Transfert de siege social (Infogreffe)",
+        "source": "Infogreffe",
+        "source_url": "https://www.infogreffe.fr",
+        "dimension": "signaux_patrimoniaux",
+        "points": 8,
+        "severity": "medium",
+        "family": "Patrimoine & Transmission",
+    },
+
+    # =========================================================================
+    # --- Presse / Google News signals ---
+    # =========================================================================
+    "presse_cession": {
+        "label": "Article presse : cession / reprise / vente detectee",
+        "source": "Google News",
+        "source_url": "https://news.google.com",
+        "dimension": "signaux_patrimoniaux",
+        "points": 20,
+        "severity": "high",
+        "family": "Patrimoine & Transmission",
+    },
+    "presse_difficultes": {
+        "label": "Article presse : difficultes / redressement judiciaire",
+        "source": "Google News",
+        "source_url": "https://news.google.com",
+        "dimension": "dynamique_financiere",
+        "points": 15,
+        "severity": "high",
+        "family": "Dynamique Financiere",
+    },
+    "presse_levee_fonds": {
+        "label": "Article presse : levee de fonds / investissement",
+        "source": "Google News",
+        "source_url": "https://news.google.com",
+        "dimension": "dynamique_financiere",
+        "points": 12,
+        "severity": "medium",
+        "family": "Dynamique Financiere",
+    },
+    "presse_partenariat": {
+        "label": "Article presse : partenariat / alliance strategique",
+        "source": "Google News",
+        "source_url": "https://news.google.com",
+        "dimension": "consolidation_sectorielle",
+        "points": 8,
+        "severity": "medium",
+        "family": "Consolidation Sectorielle",
+    },
 }
 
 

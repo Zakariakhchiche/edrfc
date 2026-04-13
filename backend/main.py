@@ -18,6 +18,9 @@ import asyncio
 import time
 import copy
 import json
+import re
+import urllib.parse
+import xml.etree.ElementTree as ET
 import httpx
 from dotenv import load_dotenv
 
@@ -477,6 +480,111 @@ async def get_pappers_concurrents(code_naf: str, departement: str = "", ca_min: 
         args["chiffre_affaires_min"] = str(ca_min)
     result = await call_pappers_mcp("recherche-entreprises", args)
     return _parse_mcp_json(result)
+
+
+# ==========================================================================
+# Google News RSS
+# ==========================================================================
+
+PRESS_SIGNAL_KEYWORDS = {
+    "presse_cession": ["cession", "cede", "cède", "vend", "reprise", "acquis", "acquisition", "rachat", "vendu"],
+    "presse_difficultes": ["liquidation", "redressement", "difficulte", "difficultes", "perte", "faillite", "dépôt de bilan"],
+    "presse_levee_fonds": ["levée de fonds", "leve", "lèvent", "investissement", "financement", "capital-risque"],
+    "presse_partenariat": ["partenariat", "alliance", "accord", "joint-venture", "rapprochement"],
+}
+
+
+async def get_google_news(company_name: str, max_results: int = 6) -> list:
+    """Fetch recent news from Google News RSS for a company name."""
+    query = urllib.parse.quote(f'"{company_name}"')
+    url = f"https://news.google.com/rss/search?q={query}&hl=fr&gl=FR&ceid=FR:fr"
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            resp = await client.get(url, headers={
+                "User-Agent": "Mozilla/5.0 (compatible; EdRCF/6.0)"
+            })
+        if resp.status_code != 200:
+            return []
+        root = ET.fromstring(resp.content)
+        channel = root.find("channel")
+        if not channel:
+            return []
+        articles = []
+        for item in channel.findall("item")[:max_results]:
+            title = item.findtext("title") or ""
+            link = item.findtext("link") or ""
+            pub_date = item.findtext("pubDate") or ""
+            source = item.findtext("source") or ""
+            title_lower = title.lower()
+            detected = [
+                sig for sig, kws in PRESS_SIGNAL_KEYWORDS.items()
+                if any(kw in title_lower for kw in kws)
+            ]
+            articles.append({
+                "title": title,
+                "link": link,
+                "date": pub_date,
+                "source": source,
+                "signals": detected,
+            })
+        return articles
+    except Exception as e:
+        print(f"[GoogleNews] Error for '{company_name}': {e}")
+        return []
+
+
+# ==========================================================================
+# Infogreffe open data
+# ==========================================================================
+
+INFOGREFFE_DATASETS = [
+    "actes-rcs-insee",
+    "kbis-et-actes",
+    "actes-et-bilans",
+]
+INFOGREFFE_BASE = "https://opendata.datainfogreffe.fr/api/explore/v2.1/catalog/datasets"
+
+
+async def get_infogreffe_actes(siren: str, max_results: int = 10) -> list:
+    """
+    Fetch recent actes RCS from Infogreffe open data by SIREN.
+    Tries multiple dataset names gracefully.
+    """
+    for dataset in INFOGREFFE_DATASETS:
+        url = f"{INFOGREFFE_BASE}/{dataset}/records"
+        params = {
+            "where": f'siren="{siren}"',
+            "limit": max_results,
+            "order_by": "date_depot desc",
+        }
+        try:
+            async with httpx.AsyncClient(timeout=8) as client:
+                resp = await client.get(url, params=params)
+            if resp.status_code == 200:
+                data = resp.json()
+                records = data.get("results") or data.get("records") or []
+                if records:
+                    actes = []
+                    for r in records:
+                        fields = r.get("fields") or r
+                        actes.append({
+                            "type": (fields.get("libelle_type_acte")
+                                     or fields.get("type_acte")
+                                     or fields.get("nature")
+                                     or "Acte"),
+                            "date": (fields.get("date_depot")
+                                     or fields.get("date")
+                                     or ""),
+                            "description": (fields.get("libelle")
+                                            or fields.get("description")
+                                            or ""),
+                            "siren": siren,
+                        })
+                    return actes
+        except Exception as e:
+            print(f"[Infogreffe] Dataset {dataset} error for SIREN {siren}: {e}")
+            continue
+    return []
 
 
 # ==========================================================================
@@ -1162,6 +1270,63 @@ def get_target(target_id: str):
     if target:
         return {"data": target}
     raise HTTPException(status_code=404, detail="Target not found")
+
+
+@app.get("/api/news/{siren}")
+async def get_news_for_company(siren: str):
+    """
+    Fetch recent press articles from Google News RSS for a company.
+    Returns articles with M&A signal detection.
+    """
+    siren = siren.strip().replace(" ", "")
+    # Find company name from enriched targets
+    target = next((t for t in enriched_targets if t.get("siren") == siren), None)
+    company_name = target["name"] if target else siren
+
+    articles = await get_google_news(company_name)
+    # Aggregate detected signals across all articles
+    detected_signals: set = set()
+    for a in articles:
+        for sig in a.get("signals", []):
+            detected_signals.add(sig)
+
+    return {
+        "data": {
+            "company": company_name,
+            "siren": siren,
+            "articles": articles,
+            "signals_detected": list(detected_signals),
+        }
+    }
+
+
+@app.get("/api/infogreffe/{siren}")
+async def get_infogreffe_endpoint(siren: str):
+    """
+    Fetch recent actes RCS from Infogreffe open data for a SIREN.
+    """
+    siren = _validate_siren(siren)
+    actes = await get_infogreffe_actes(siren)
+    # Detect signals from actes
+    detected_signals: set = set()
+    for acte in actes:
+        acte_type = (acte.get("type") or "").lower()
+        if any(w in acte_type for w in ["nomination", "gerant", "president", "directeur"]):
+            detected_signals.add("infogreffe_nouveau_dirigeant")
+        if any(w in acte_type for w in ["capital", "augmentation", "reduction"]):
+            detected_signals.add("infogreffe_capital_change")
+        if any(w in acte_type for w in ["fusion", "absorption", "scission"]):
+            detected_signals.add("infogreffe_fusion_absorption")
+        if any(w in acte_type for w in ["transfert", "siege"]):
+            detected_signals.add("infogreffe_transfert_siege")
+
+    return {
+        "data": {
+            "siren": siren,
+            "actes": actes,
+            "signals_detected": list(detected_signals),
+        }
+    }
 
 
 @app.get("/api/signals")
@@ -2178,20 +2343,62 @@ def get_sectors():
     return {"data": SECTORS_HEAT}
 
 
+async def _enrich_with_external_sources(targets: list) -> list:
+    """
+    Enrich each target with Google News + Infogreffe data.
+    Adds news_articles and infogreffe_actes to each company dict,
+    so detect_signals() can pick them up during scoring.
+    Runs all fetches concurrently with a timeout guard.
+    """
+    async def _enrich_one(target: dict) -> dict:
+        siren = target.get("siren", "")
+        name = target.get("name", "")
+        enriched = dict(target)
+        try:
+            news_task = asyncio.create_task(get_google_news(name, max_results=6))
+            infogreffe_task = asyncio.create_task(get_infogreffe_actes(siren)) if siren else None
+
+            news = await asyncio.wait_for(news_task, timeout=12)
+            actes = []
+            if infogreffe_task:
+                try:
+                    actes = await asyncio.wait_for(infogreffe_task, timeout=10)
+                except asyncio.TimeoutError:
+                    print(f"[Infogreffe] Timeout for SIREN {siren}")
+
+            enriched["news_articles"] = news
+            enriched["infogreffe_actes"] = actes
+        except Exception as e:
+            print(f"[ExternalEnrich] Error for {name}: {e}")
+            enriched.setdefault("news_articles", [])
+            enriched.setdefault("infogreffe_actes", [])
+        return enriched
+
+    enriched_list = await asyncio.gather(*[_enrich_one(t) for t in targets], return_exceptions=False)
+    return list(enriched_list)
+
+
 @app.post("/api/refresh-targets")
 async def refresh_targets():
-    """Refresh targets from Pappers MCP."""
+    """Refresh targets from Pappers MCP, then enrich with Google News + Infogreffe."""
     global enriched_targets, raw_targets
     if not PAPPERS_MCP_URL:
         raise HTTPException(400, "Pappers MCP URL not configured")
     fetched = await load_targets_from_pappers(PAPPERS_MCP_URL, count=10)
     if fetched:
+        # Enrich with external sources (news + infogreffe actes)
+        print(f"[EdRCF] Enriching {len(fetched)} targets with Google News + Infogreffe...")
+        fetched = await _enrich_with_external_sources(fetched)
         save_cache(fetched)
         raw_targets = fetched
         enriched_targets = [enrich_target(c) for c in fetched]
+        news_count = sum(len(t.get("news_articles", [])) for t in fetched)
+        actes_count = sum(len(t.get("infogreffe_actes", [])) for t in fetched)
         return {
-            "message": f"{len(enriched_targets)} cibles chargees depuis Pappers",
+            "message": f"{len(enriched_targets)} cibles chargees — {news_count} articles presse, {actes_count} actes Infogreffe",
             "total": len(enriched_targets),
+            "news_articles": news_count,
+            "infogreffe_actes": actes_count,
         }
     raise HTTPException(500, "Echec du chargement Pappers")
 

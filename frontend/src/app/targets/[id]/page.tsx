@@ -7,7 +7,7 @@ import {
   ArrowLeft, Target, ShieldCheck, Zap, TrendingUp, AlertCircle,
   Share2, ArrowRight, Radio, Fingerprint, Activity, Clock,
   Users, Briefcase, Crosshair, MapPin, Gauge, FileText, AlertTriangle, Network,
-  ExternalLink, Building2, Calendar, Hash, User
+  ExternalLink, Building2, Calendar, Hash, User, Newspaper, ScrollText
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { Target as TargetType } from "@/types";
@@ -57,6 +57,10 @@ export default function TargetDetail() {
   const [error, setError] = useState(false);
   const [processingAction, setProcessingAction] = useState<string | null>(null);
   const [notification, setNotification] = useState<{message: string, type: 'success' | 'info'} | null>(null);
+  const [news, setNews] = useState<{title:string; link:string; date:string; source:string; signals:string[]}[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [actes, setActes] = useState<{type:string; date:string; description:string}[]>([]);
+  const [actesLoading, setActesLoading] = useState(false);
 
   useEffect(() => {
     if (notification) {
@@ -85,6 +89,20 @@ export default function TargetDetail() {
       .then(json => {
         setTargetData(json.data);
         setLoading(false);
+        // Fetch external enrichments after main data loads
+        const siren = json.data?.siren;
+        if (siren) {
+          setNewsLoading(true);
+          fetch(`/api/news/${siren}`)
+            .then(r => r.json())
+            .then(d => { setNews(d.data?.articles || []); setNewsLoading(false); })
+            .catch(() => setNewsLoading(false));
+          setActesLoading(true);
+          fetch(`/api/infogreffe/${siren}`)
+            .then(r => r.json())
+            .then(d => { setActes(d.data?.actes || []); setActesLoading(false); })
+            .catch(() => setActesLoading(false));
+        }
       })
       .catch(err => {
         console.error(err);
@@ -517,6 +535,81 @@ export default function TargetDetail() {
                  </div>
               </section>
            </div>
+
+           {/* Google News Section */}
+           <section className="p-10 rounded-[3rem] bg-white/[0.02] border border-white/10 space-y-6">
+              <h2 className="text-xs font-black uppercase tracking-[0.4em] text-gray-500 flex items-center gap-4">
+                 <span className="w-10 h-px bg-white/10" />
+                 <Newspaper size={16} className="text-indigo-400" /> Veille Presse
+              </h2>
+              {newsLoading ? (
+                <div className="flex items-center gap-3 text-gray-600 text-[10px] font-black uppercase tracking-widest">
+                  <div className="w-4 h-4 border-2 border-gray-700 border-t-indigo-500 rounded-full animate-spin" />
+                  Chargement articles...
+                </div>
+              ) : news.length === 0 ? (
+                <p className="text-gray-600 text-xs font-medium">Aucun article récent trouvé pour cette entreprise.</p>
+              ) : (
+                <div className="space-y-3">
+                  {news.map((article, i) => (
+                    <a
+                      key={i}
+                      href={article.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-start gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-indigo-500/20 transition-all group"
+                    >
+                      <ExternalLink size={14} className="text-indigo-400 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-gray-200 group-hover:text-white transition-colors leading-snug line-clamp-2">{article.title}</p>
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                          <span className="text-[9px] font-black text-gray-600 uppercase tracking-widest">{article.source}</span>
+                          <span className="text-[9px] text-gray-700">{article.date?.split(',')[0]}</span>
+                          {article.signals?.map(sig => (
+                            <span key={sig} className="px-2 py-0.5 rounded-md bg-rose-500/10 border border-rose-500/20 text-[8px] font-black text-rose-400 uppercase tracking-widest">
+                              Signal M&A
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+           </section>
+
+           {/* Infogreffe Actes Section */}
+           <section className="p-10 rounded-[3rem] bg-white/[0.02] border border-white/10 space-y-6">
+              <h2 className="text-xs font-black uppercase tracking-[0.4em] text-gray-500 flex items-center gap-4">
+                 <span className="w-10 h-px bg-white/10" />
+                 <ScrollText size={16} className="text-amber-400" /> Actes RCS — Infogreffe
+              </h2>
+              {actesLoading ? (
+                <div className="flex items-center gap-3 text-gray-600 text-[10px] font-black uppercase tracking-widest">
+                  <div className="w-4 h-4 border-2 border-gray-700 border-t-amber-500 rounded-full animate-spin" />
+                  Chargement actes...
+                </div>
+              ) : actes.length === 0 ? (
+                <p className="text-gray-600 text-xs font-medium">Aucun acte récent disponible en open data pour cette société.</p>
+              ) : (
+                <div className="space-y-3">
+                  {actes.map((acte, i) => (
+                    <div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-amber-500/20 transition-all">
+                      <div className="w-2 h-2 rounded-full bg-amber-500 shrink-0 mt-2" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-black text-gray-200 uppercase tracking-tight">{acte.type}</p>
+                        {acte.description && (
+                          <p className="text-xs text-gray-500 mt-1 leading-snug line-clamp-2">{acte.description}</p>
+                        )}
+                        {acte.date && (
+                          <span className="text-[9px] font-black text-amber-500/60 uppercase tracking-widest mt-2 block">{acte.date}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+           </section>
 
            {/* Bottom Bar */}
            <div className="mt-10 pt-10 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-8">

@@ -335,6 +335,40 @@ def detect_signals(company_info, search_had_age_filter=False):
         if "procedure_collective" not in signals:
             signals.append("procedure_collective")
 
+    # --- Infogreffe actes (deposés dans les 12 derniers mois) ---
+    infogreffe_actes = company_info.get("infogreffe_actes") or []
+    for acte in infogreffe_actes:
+        acte_type = (acte.get("type") or acte.get("libelle_type_acte") or "").lower()
+        if any(w in acte_type for w in ["nomination", "gerant", "president", "directeur general", "pdg"]):
+            if "infogreffe_nouveau_dirigeant" not in signals:
+                signals.append("infogreffe_nouveau_dirigeant")
+        if any(w in acte_type for w in ["capital", "augmentation", "reduction", "modification du capital"]):
+            if "infogreffe_capital_change" not in signals:
+                signals.append("infogreffe_capital_change")
+        if any(w in acte_type for w in ["fusion", "absorption", "scission", "apport"]):
+            if "infogreffe_fusion_absorption" not in signals:
+                signals.append("infogreffe_fusion_absorption")
+        if any(w in acte_type for w in ["transfert", "siege", "siege social"]):
+            if "infogreffe_transfert_siege" not in signals:
+                signals.append("infogreffe_transfert_siege")
+
+    # --- Google News articles ---
+    news_articles = company_info.get("news_articles") or []
+    for article in news_articles:
+        title = (article.get("title") or "").lower()
+        if any(w in title for w in ["cession", "cede", "vend", "reprise", "acquis", "acquisition", "rachat"]):
+            if "presse_cession" not in signals:
+                signals.append("presse_cession")
+        if any(w in title for w in ["liquidation", "redressement", "difficulte", "difficultes", "perte", "faillite"]):
+            if "presse_difficultes" not in signals:
+                signals.append("presse_difficultes")
+        if any(w in title for w in ["levee de fonds", "leve", "levent", "investissement", "financement"]):
+            if "presse_levee_fonds" not in signals:
+                signals.append("presse_levee_fonds")
+        if any(w in title for w in ["partenariat", "alliance", "accord", "joint", "rapprochement"]):
+            if "presse_partenariat" not in signals:
+                signals.append("presse_partenariat")
+
     # --- Fallback: press_regional if no signals detected ---
     if not signals:
         signals.append("press_regional")
