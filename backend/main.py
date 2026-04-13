@@ -3,13 +3,18 @@ EdRCF 6.0 | AI Origination Intelligence
 FastAPI backend for Edmond de Rothschild Corporate Finance M&A platform.
 """
 
+import sys
+import os
+
+# Ensure local imports work on Vercel (working dir may not be backend/)
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any, Optional
 import time
-import os
 import copy
 import json
 import httpx
@@ -85,19 +90,31 @@ enriched_targets = []
 raw_targets = []
 
 
+def _load_targets_sync():
+    """Load targets from cache (synchronous, safe for serverless cold start)."""
+    global enriched_targets, raw_targets
+    if enriched_targets:
+        return  # Already loaded
+    try:
+        cached = load_cache()
+        if cached:
+            raw_targets = cached
+            enriched_targets = [enrich_target(c) for c in cached]
+            print(f"[EdRCF] Loaded {len(enriched_targets)} targets from cache")
+        else:
+            enriched_targets = []
+            raw_targets = []
+            print("[EdRCF] No cache found. Use /api/refresh-targets to load from Pappers")
+    except Exception as e:
+        print(f"[EdRCF] Cache load error: {e}")
+        enriched_targets = []
+        raw_targets = []
+
+
 @asynccontextmanager
 async def lifespan(app):
     global enriched_targets, raw_targets
-    # Try cache first
-    cached = load_cache()
-    if cached:
-        raw_targets = cached
-        enriched_targets = [enrich_target(c) for c in cached]
-        print(f"[EdRCF] Loaded {len(enriched_targets)} targets from cache")
-    else:
-        enriched_targets = []
-        raw_targets = []
-        print("[EdRCF] No cache found. Use /api/refresh-targets to load from Pappers")
+    _load_targets_sync()
 
     # Try to fetch from Pappers in background if no cache
     if not enriched_targets and PAPPERS_MCP_URL:
@@ -132,6 +149,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Ensure targets are loaded even if lifespan doesn't run (Vercel serverless)
+_load_targets_sync()
 
 
 # ==========================================================================
