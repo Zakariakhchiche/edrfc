@@ -163,41 +163,120 @@ _load_targets_sync()
 # ==========================================================================
 
 
+_mcp_session_id: str | None = None
+
+
+def _parse_sse_result(text: str):
+    """Extract JSON-RPC result from SSE stream."""
+    for line in text.split("\n"):
+        line = line.strip()
+        if line.startswith("data: "):
+            try:
+                data = json.loads(line[6:])
+                if "result" in data:
+                    return data["result"]
+            except json.JSONDecodeError:
+                continue
+    return None
+
+
+def _extract_mcp_content(result):
+    """Extract text content from MCP tool result."""
+    if not result:
+        return None
+    # result may have {"content": [{"type": "text", "text": "..."}]}
+    if isinstance(result, dict) and "content" in result:
+        for block in result["content"]:
+            if isinstance(block, dict) and block.get("type") == "text":
+                try:
+                    return json.loads(block["text"])
+                except (json.JSONDecodeError, TypeError):
+                    return block.get("text")
+    return result
+
+
+async def _mcp_post(client: httpx.AsyncClient, method: str, params: dict, msg_id: int = 1):
+    """Send a JSON-RPC request to MCP server, handle JSON or SSE response."""
+    global _mcp_session_id
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream",
+    }
+    if _mcp_session_id:
+        headers["Mcp-Session-Id"] = _mcp_session_id
+
+    resp = await client.post(
+        PAPPERS_MCP_URL,
+        headers=headers,
+        json={"jsonrpc": "2.0", "id": msg_id, "method": method, "params": params},
+    )
+    # Capture session id from response
+    sid = resp.headers.get("mcp-session-id")
+    if sid:
+        _mcp_session_id = sid
+
+    if resp.status_code != 200:
+        print(f"[Pappers MCP] HTTP {resp.status_code} for {method}: {resp.text[:200]}")
+        return None
+
+    ct = resp.headers.get("content-type", "")
+    if "text/event-stream" in ct:
+        return _parse_sse_result(resp.text)
+    else:
+        data = resp.json()
+        return data.get("result", data)
+
+
+async def _ensure_mcp_session(client: httpx.AsyncClient):
+    """Initialize MCP session if not already done."""
+    global _mcp_session_id
+    if _mcp_session_id:
+        return True
+    # Step 1: initialize
+    result = await _mcp_post(client, "initialize", {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {"name": "edrfc-backend", "version": "1.0"},
+    }, msg_id=0)
+    if not result:
+        print("[Pappers MCP] Initialize failed")
+        return False
+    print(f"[Pappers MCP] Initialized, session={_mcp_session_id}")
+    # Step 2: send initialized notification (no id = notification)
+    try:
+        headers = {"Content-Type": "application/json"}
+        if _mcp_session_id:
+            headers["Mcp-Session-Id"] = _mcp_session_id
+        await client.post(
+            PAPPERS_MCP_URL,
+            headers=headers,
+            json={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
+        )
+    except Exception:
+        pass  # Notification, no response expected
+    return True
+
+
 async def call_pappers_mcp(tool_name: str, arguments: dict):
-    """Call a Pappers MCP tool via the streamable HTTP MCP server."""
+    """Call a Pappers MCP tool via the streamable HTTP MCP server with proper handshake."""
     if not PAPPERS_MCP_URL:
         return None
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            # MCP streamable HTTP: POST with JSON-RPC
-            resp = await client.post(
-                PAPPERS_MCP_URL,
-                headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream"},
-                json={
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "tools/call",
-                    "params": {"name": tool_name, "arguments": arguments},
-                },
-            )
-            if resp.status_code == 200:
-                content_type = resp.headers.get("content-type", "")
-                if "text/event-stream" in content_type:
-                    # Parse SSE response
-                    for line in resp.text.split("\n"):
-                        if line.startswith("data: "):
-                            data = json.loads(line[6:])
-                            if "result" in data:
-                                return data["result"]
-                    return None
-                else:
-                    data = resp.json()
-                    if "result" in data:
-                        return data["result"]
-                    return data
-            print(f"[Pappers MCP] HTTP {resp.status_code}: {resp.text[:200]}")
+        async with httpx.AsyncClient(timeout=90) as client:
+            # Ensure MCP session is initialized
+            ok = await _ensure_mcp_session(client)
+            if not ok:
+                return None
+            # Call the tool
+            result = await _mcp_post(client, "tools/call", {
+                "name": tool_name,
+                "arguments": arguments,
+            }, msg_id=1)
+            return _extract_mcp_content(result)
     except Exception as e:
         print(f"[Pappers MCP] Error: {e}")
+        # Reset session on error so next call re-initializes
+        _mcp_session_id = None
     return None
 
 

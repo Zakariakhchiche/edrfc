@@ -45,47 +45,97 @@ def load_cache():
 # MCP call helper
 # ============================================================================
 
+_loader_session_id: str | None = None
+
+
+def _parse_sse(text: str):
+    """Extract JSON-RPC result from SSE stream."""
+    for line in text.split("\n"):
+        line = line.strip()
+        if line.startswith("data: "):
+            try:
+                data = json.loads(line[6:])
+                if "result" in data:
+                    return data["result"]
+            except json.JSONDecodeError:
+                continue
+    return None
+
+
+def _extract_content(result):
+    """Extract text content from MCP tool result."""
+    if not result:
+        return None
+    if isinstance(result, dict) and "content" in result:
+        for block in result["content"]:
+            if isinstance(block, dict) and block.get("type") == "text":
+                try:
+                    return json.loads(block["text"])
+                except (json.JSONDecodeError, TypeError):
+                    return {"raw": block["text"]}
+    return result
+
+
+async def _loader_post(client, mcp_url, method, params, msg_id=1):
+    """Send JSON-RPC to MCP, handle JSON or SSE."""
+    global _loader_session_id
+    headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+    if _loader_session_id:
+        headers["Mcp-Session-Id"] = _loader_session_id
+    resp = await client.post(mcp_url, headers=headers,
+        json={"jsonrpc": "2.0", "id": msg_id, "method": method, "params": params})
+    sid = resp.headers.get("mcp-session-id")
+    if sid:
+        _loader_session_id = sid
+    if resp.status_code != 200:
+        print(f"[Pappers Loader] HTTP {resp.status_code}: {resp.text[:200]}")
+        return None
+    ct = resp.headers.get("content-type", "")
+    if "text/event-stream" in ct:
+        return _parse_sse(resp.text)
+    data = resp.json()
+    return data.get("result", data)
+
+
+async def _ensure_loader_session(client, mcp_url):
+    """Initialize MCP session for the loader."""
+    global _loader_session_id
+    if _loader_session_id:
+        return True
+    result = await _loader_post(client, mcp_url, "initialize", {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {"name": "edrfc-loader", "version": "1.0"},
+    }, msg_id=0)
+    if not result:
+        return False
+    print(f"[Pappers Loader] Initialized, session={_loader_session_id}")
+    try:
+        headers = {"Content-Type": "application/json"}
+        if _loader_session_id:
+            headers["Mcp-Session-Id"] = _loader_session_id
+        await client.post(mcp_url, headers=headers,
+            json={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
+    except Exception:
+        pass
+    return True
+
+
 async def call_pappers_mcp(mcp_url, tool_name, arguments):
-    """Call a Pappers MCP tool via the streamable HTTP MCP server."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(
-            mcp_url,
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "application/json, text/event-stream",
-            },
-            json={
-                "jsonrpc": "2.0",
-                "id": 1,
-                "method": "tools/call",
-                "params": {"name": tool_name, "arguments": arguments},
-            },
-        )
-        content_type = resp.headers.get("content-type", "")
-        if "text/event-stream" in content_type:
-            for line in resp.text.split("\n"):
-                if line.startswith("data: "):
-                    data = json.loads(line[6:])
-                    if "result" in data and "content" in data["result"]:
-                        for block in data["result"]["content"]:
-                            if block.get("type") == "text":
-                                try:
-                                    return json.loads(block["text"])
-                                except (json.JSONDecodeError, TypeError):
-                                    return {"raw": block["text"]}
-            return None
-        else:
-            data = resp.json()
-            if "result" in data and "content" in data["result"]:
-                for block in data["result"]["content"]:
-                    if block.get("type") == "text":
-                        try:
-                            return json.loads(block["text"])
-                        except (json.JSONDecodeError, TypeError):
-                            return {"raw": block["text"]}
-            if "result" in data:
-                return data["result"]
-            return data
+    """Call a Pappers MCP tool with proper MCP handshake."""
+    try:
+        async with httpx.AsyncClient(timeout=90) as client:
+            ok = await _ensure_loader_session(client, mcp_url)
+            if not ok:
+                return None
+            result = await _loader_post(client, mcp_url, "tools/call", {
+                "name": tool_name, "arguments": arguments,
+            }, msg_id=1)
+            return _extract_content(result)
+    except Exception as e:
+        print(f"[Pappers Loader] Error: {e}")
+        _loader_session_id = None
+    return None
 
 
 # ============================================================================
