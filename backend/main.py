@@ -115,22 +115,28 @@ def _load_targets_sync():
         raw_targets = []
 
 
+async def _background_pappers_load():
+    """Load targets from Pappers in the background — never blocks startup."""
+    global enriched_targets, raw_targets
+    try:
+        fetched = await load_targets_from_pappers(PAPPERS_MCP_URL, count=10)
+        if fetched:
+            save_cache(fetched)
+            raw_targets = fetched
+            enriched_targets = [enrich_target(c) for c in fetched]
+            print(f"[EdRCF] Background: loaded {len(enriched_targets)} targets from Pappers")
+    except Exception as e:
+        print(f"[EdRCF] Background Pappers fetch failed: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app):
-    global enriched_targets, raw_targets
     _load_targets_sync()
 
-    # Try to fetch from Pappers in background if no cache
+    # Launch Pappers loading in background — does NOT block server startup
     if not enriched_targets and PAPPERS_MCP_URL:
-        try:
-            fetched = await load_targets_from_pappers(PAPPERS_MCP_URL, count=10)
-            if fetched:
-                save_cache(fetched)
-                raw_targets = fetched
-                enriched_targets = [enrich_target(c) for c in fetched]
-                print(f"[EdRCF] Loaded {len(enriched_targets)} targets from Pappers MCP")
-        except Exception as e:
-            print(f"[EdRCF] Pappers fetch failed: {e}")
+        import asyncio
+        asyncio.create_task(_background_pappers_load())
 
     yield
 
