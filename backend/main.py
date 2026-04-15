@@ -2503,7 +2503,7 @@ async def debug_mcp():
     steps = []
     steps.append({"step": "url", "url_len": len(PAPPERS_MCP_URL), "url_prefix": PAPPERS_MCP_URL[:30]})
     try:
-        async with httpx.AsyncClient(timeout=90) as client:
+        async with httpx.AsyncClient(timeout=30) as client:
             # Step 1: Raw initialize POST
             headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
             init_body = {
@@ -2550,8 +2550,14 @@ async def debug_mcp():
                 "body_sample": resp3.text[:1000],
             })
             return {"steps": steps}
+    except httpx.TimeoutException as e:
+        steps.append({"step": "timeout", "error": f"Timeout: {type(e).__name__}: {e}"})
+        return {"steps": steps}
+    except httpx.ConnectError as e:
+        steps.append({"step": "connect_error", "error": f"Connect: {type(e).__name__}: {e}"})
+        return {"steps": steps}
     except Exception as e:
-        steps.append({"step": "exception", "error": str(e)})
+        steps.append({"step": "exception", "error": f"{type(e).__name__}: {e}"})
         return {"steps": steps}
 
 
