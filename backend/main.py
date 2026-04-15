@@ -172,25 +172,10 @@ _load_targets_sync()
 _mcp_session_id: str | None = None
 
 
-def _parse_sse_result(text: str):
-    """Extract JSON-RPC result from SSE stream."""
-    for line in text.split("\n"):
-        line = line.strip()
-        if line.startswith("data: "):
-            try:
-                data = json.loads(line[6:])
-                if "result" in data:
-                    return data["result"]
-            except json.JSONDecodeError:
-                continue
-    return None
-
-
 def _extract_mcp_content(result):
     """Extract text content from MCP tool result."""
     if not result:
         return None
-    # result may have {"content": [{"type": "text", "text": "..."}]}
     if isinstance(result, dict) and "content" in result:
         for block in result["content"]:
             if isinstance(block, dict) and block.get("type") == "text":
@@ -201,8 +186,8 @@ def _extract_mcp_content(result):
     return result
 
 
-async def _mcp_post(client: httpx.AsyncClient, method: str, params: dict, msg_id: int = 1):
-    """Send a JSON-RPC request to MCP server, handle JSON or SSE response."""
+async def _mcp_stream_post(client: httpx.AsyncClient, method: str, params: dict, msg_id: int | None = 1):
+    """Send JSON-RPC to MCP server using STREAMING to handle SSE responses."""
     global _mcp_session_id
     headers = {
         "Content-Type": "application/json",
@@ -211,26 +196,49 @@ async def _mcp_post(client: httpx.AsyncClient, method: str, params: dict, msg_id
     if _mcp_session_id:
         headers["Mcp-Session-Id"] = _mcp_session_id
 
-    resp = await client.post(
-        PAPPERS_MCP_URL,
-        headers=headers,
-        json={"jsonrpc": "2.0", "id": msg_id, "method": method, "params": params},
-    )
-    # Capture session id from response
-    sid = resp.headers.get("mcp-session-id")
-    if sid:
-        _mcp_session_id = sid
+    body: dict = {"jsonrpc": "2.0", "method": method, "params": params}
+    if msg_id is not None:
+        body["id"] = msg_id
 
-    if resp.status_code != 200:
-        print(f"[Pappers MCP] HTTP {resp.status_code} for {method}: {resp.text[:200]}")
-        return None
+    async with client.stream(
+        "POST", PAPPERS_MCP_URL, headers=headers, json=body
+    ) as resp:
+        sid = resp.headers.get("mcp-session-id")
+        if sid:
+            _mcp_session_id = sid
 
-    ct = resp.headers.get("content-type", "")
-    if "text/event-stream" in ct:
-        return _parse_sse_result(resp.text)
-    else:
-        data = resp.json()
-        return data.get("result", data)
+        if resp.status_code != 200:
+            body_text = ""
+            async for chunk in resp.aiter_text():
+                body_text += chunk
+                if len(body_text) > 500:
+                    break
+            print(f"[Pappers MCP] HTTP {resp.status_code} for {method}: {body_text[:200]}")
+            return None
+
+        ct = resp.headers.get("content-type", "")
+
+        if "text/event-stream" in ct:
+            # Read SSE events line by line
+            result = None
+            async for line in resp.aiter_lines():
+                line = line.strip()
+                if line.startswith("data: "):
+                    try:
+                        data = json.loads(line[6:])
+                        if "result" in data:
+                            result = data["result"]
+                            break
+                    except json.JSONDecodeError:
+                        continue
+            return result
+        else:
+            # Plain JSON response
+            body_text = ""
+            async for chunk in resp.aiter_text():
+                body_text += chunk
+            data = json.loads(body_text)
+            return data.get("result", data)
 
 
 async def _ensure_mcp_session(client: httpx.AsyncClient):
@@ -239,7 +247,7 @@ async def _ensure_mcp_session(client: httpx.AsyncClient):
     if _mcp_session_id:
         return True
     # Step 1: initialize
-    result = await _mcp_post(client, "initialize", {
+    result = await _mcp_stream_post(client, "initialize", {
         "protocolVersion": "2024-11-05",
         "capabilities": {},
         "clientInfo": {"name": "edrfc-backend", "version": "1.0"},
@@ -250,38 +258,28 @@ async def _ensure_mcp_session(client: httpx.AsyncClient):
     print(f"[Pappers MCP] Initialized, session={_mcp_session_id}")
     # Step 2: send initialized notification (no id = notification)
     try:
-        headers = {"Content-Type": "application/json"}
-        if _mcp_session_id:
-            headers["Mcp-Session-Id"] = _mcp_session_id
-        await client.post(
-            PAPPERS_MCP_URL,
-            headers=headers,
-            json={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}},
-        )
+        await _mcp_stream_post(client, "notifications/initialized", {}, msg_id=None)
     except Exception:
-        pass  # Notification, no response expected
+        pass
     return True
 
 
 async def call_pappers_mcp(tool_name: str, arguments: dict):
-    """Call a Pappers MCP tool via the streamable HTTP MCP server with proper handshake."""
+    """Call a Pappers MCP tool via streamable HTTP with SSE streaming support."""
     if not PAPPERS_MCP_URL:
         return None
     try:
-        async with httpx.AsyncClient(timeout=90) as client:
-            # Ensure MCP session is initialized
+        async with httpx.AsyncClient(timeout=httpx.Timeout(90, connect=15)) as client:
             ok = await _ensure_mcp_session(client)
             if not ok:
                 return None
-            # Call the tool
-            result = await _mcp_post(client, "tools/call", {
+            result = await _mcp_stream_post(client, "tools/call", {
                 "name": tool_name,
                 "arguments": arguments,
             }, msg_id=1)
             return _extract_mcp_content(result)
     except Exception as e:
         print(f"[Pappers MCP] Error: {e}")
-        # Reset session on error so next call re-initializes
         _mcp_session_id = None
     return None
 
@@ -2497,15 +2495,18 @@ async def refresh_targets():
 
 @app.get("/api/debug-mcp")
 async def debug_mcp():
-    """Debug endpoint: test MCP Pappers connection step by step."""
+    """Debug endpoint: test MCP Pappers connection with streaming SSE support."""
     if not PAPPERS_MCP_URL:
         return {"error": "PAPPERS_MCP_URL not set", "url_len": 0}
     steps = []
     steps.append({"step": "url", "url_len": len(PAPPERS_MCP_URL), "url_prefix": PAPPERS_MCP_URL[:30]})
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
-            # Step 1: Raw initialize POST
-            headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+        async with httpx.AsyncClient(timeout=httpx.Timeout(45, connect=10)) as client:
+            # Step 1: Streaming POST initialize
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            }
             init_body = {
                 "jsonrpc": "2.0", "id": 0, "method": "initialize",
                 "params": {
@@ -2514,50 +2515,103 @@ async def debug_mcp():
                     "clientInfo": {"name": "edrfc-debug", "version": "1.0"},
                 },
             }
-            resp = await client.post(PAPPERS_MCP_URL, headers=headers, json=init_body)
-            steps.append({
-                "step": "initialize",
-                "status": resp.status_code,
-                "content_type": resp.headers.get("content-type", ""),
-                "session_id": resp.headers.get("mcp-session-id", ""),
-                "body_sample": resp.text[:500],
-            })
-            if resp.status_code != 200:
-                return {"steps": steps, "error": f"Init failed: HTTP {resp.status_code}"}
+            async with client.stream("POST", PAPPERS_MCP_URL, headers=headers, json=init_body) as resp:
+                session_id = resp.headers.get("mcp-session-id", "")
+                ct = resp.headers.get("content-type", "")
+                steps.append({
+                    "step": "init_headers",
+                    "status": resp.status_code,
+                    "content_type": ct,
+                    "session_id": session_id,
+                })
+                if resp.status_code != 200:
+                    err = ""
+                    async for chunk in resp.aiter_text():
+                        err += chunk
+                        if len(err) > 300:
+                            break
+                    steps.append({"step": "init_error", "body": err[:300]})
+                    return {"steps": steps}
 
-            session_id = resp.headers.get("mcp-session-id", "")
+                # Read response (SSE or JSON)
+                init_result = None
+                if "text/event-stream" in ct:
+                    lines_seen = []
+                    async for line in resp.aiter_lines():
+                        lines_seen.append(line[:200])
+                        if line.strip().startswith("data: "):
+                            try:
+                                data = json.loads(line.strip()[6:])
+                                if "result" in data:
+                                    init_result = data["result"]
+                                    break
+                            except json.JSONDecodeError:
+                                continue
+                        if len(lines_seen) > 20:
+                            break
+                    steps.append({"step": "init_sse", "result_keys": list(init_result.keys()) if isinstance(init_result, dict) else str(type(init_result)), "lines_seen": len(lines_seen)})
+                else:
+                    body_text = ""
+                    async for chunk in resp.aiter_text():
+                        body_text += chunk
+                    data = json.loads(body_text)
+                    init_result = data.get("result", data)
+                    steps.append({"step": "init_json", "result_keys": list(init_result.keys()) if isinstance(init_result, dict) else str(type(init_result))})
 
-            # Step 2: Send initialized notification
+            if not init_result:
+                return {"steps": steps, "error": "No init result"}
+
+            # Step 2: Notification (fire and forget via stream too)
             notif_headers = {"Content-Type": "application/json"}
             if session_id:
                 notif_headers["Mcp-Session-Id"] = session_id
-            resp2 = await client.post(PAPPERS_MCP_URL, headers=notif_headers,
-                json={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
-            steps.append({"step": "notif", "status": resp2.status_code})
+            try:
+                async with client.stream("POST", PAPPERS_MCP_URL, headers=notif_headers,
+                    json={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}) as r2:
+                    steps.append({"step": "notif", "status": r2.status_code})
+            except Exception:
+                steps.append({"step": "notif", "status": "skipped"})
 
-            # Step 3: Call tools/call
-            call_headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+            # Step 3: tools/call with streaming
+            call_headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+            }
             if session_id:
                 call_headers["Mcp-Session-Id"] = session_id
-            resp3 = await client.post(PAPPERS_MCP_URL, headers=call_headers, json={
+            async with client.stream("POST", PAPPERS_MCP_URL, headers=call_headers, json={
                 "jsonrpc": "2.0", "id": 1, "method": "tools/call",
                 "params": {"name": "recherche-entreprises", "arguments": {"nom_entreprise": "Capgemini", "par_page": "2"}},
-            })
-            steps.append({
-                "step": "tools_call",
-                "status": resp3.status_code,
-                "content_type": resp3.headers.get("content-type", ""),
-                "body_sample": resp3.text[:1000],
-            })
+            }) as resp3:
+                ct3 = resp3.headers.get("content-type", "")
+                steps.append({"step": "call_headers", "status": resp3.status_code, "content_type": ct3})
+                call_result = None
+                if "text/event-stream" in ct3:
+                    async for line in resp3.aiter_lines():
+                        if line.strip().startswith("data: "):
+                            try:
+                                data = json.loads(line.strip()[6:])
+                                if "result" in data:
+                                    call_result = data["result"]
+                                    break
+                            except json.JSONDecodeError:
+                                continue
+                else:
+                    body_text = ""
+                    async for chunk in resp3.aiter_text():
+                        body_text += chunk
+                    call_result = json.loads(body_text).get("result")
+                sample = str(call_result)[:500] if call_result else "None"
+                steps.append({"step": "call_result", "sample": sample})
             return {"steps": steps}
     except httpx.TimeoutException as e:
-        steps.append({"step": "timeout", "error": f"Timeout: {type(e).__name__}: {e}"})
+        steps.append({"step": "timeout", "error": f"{type(e).__name__}: {e}"})
         return {"steps": steps}
     except httpx.ConnectError as e:
-        steps.append({"step": "connect_error", "error": f"Connect: {type(e).__name__}: {e}"})
+        steps.append({"step": "connect_error", "error": f"{type(e).__name__}: {e}"})
         return {"steps": steps}
     except Exception as e:
-        steps.append({"step": "exception", "error": f"{type(e).__name__}: {e}"})
+        steps.append({"step": "exception", "error": f"{type(e).__name__}: {str(e)[:200]}"})
         return {"steps": steps}
 
 
