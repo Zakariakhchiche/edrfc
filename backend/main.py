@@ -2495,6 +2495,33 @@ async def refresh_targets():
     raise HTTPException(500, "Echec du chargement Pappers")
 
 
+@app.get("/api/debug-mcp")
+async def debug_mcp():
+    """Debug endpoint: test MCP Pappers connection and return raw response."""
+    if not PAPPERS_MCP_URL:
+        return {"error": "PAPPERS_MCP_URL not set"}
+    try:
+        async with httpx.AsyncClient(timeout=90) as client:
+            # Step 1: Initialize
+            ok = await _ensure_mcp_session(client)
+            if not ok:
+                return {"error": "MCP initialize failed", "session": _mcp_session_id}
+            # Step 2: Simple search
+            result = await _mcp_post(client, "tools/call", {
+                "name": "recherche-entreprises",
+                "arguments": {"nom_entreprise": "Capgemini", "par_page": "2"},
+            }, msg_id=2)
+            return {
+                "session": _mcp_session_id,
+                "raw_result_type": type(result).__name__,
+                "raw_result_keys": list(result.keys()) if isinstance(result, dict) else None,
+                "raw_result_sample": str(result)[:1000] if result else None,
+                "extracted": str(_extract_mcp_content(result))[:1000] if result else None,
+            }
+    except Exception as e:
+        return {"error": str(e), "session": _mcp_session_id}
+
+
 if __name__ == "__main__":
     import uvicorn
 
