@@ -4,6 +4,9 @@ const nextConfig: NextConfig = {
   eslint: {
     ignoreDuringBuilds: true,
   },
+  experimental: {
+    proxyTimeout: 120_000,
+  },
   async rewrites() {
     if (process.env.NODE_ENV === "production") {
       // In production on Vercel, proxy /api/* to the backend service

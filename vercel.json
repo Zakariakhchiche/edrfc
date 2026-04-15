@@ -3,11 +3,13 @@
     "frontend": {
       "entrypoint": "frontend",
       "routePrefix": "/",
-      "framework": "nextjs"
+      "framework": "nextjs",
+      "maxDuration": 60
     },
     "backend": {
       "entrypoint": "backend",
-      "routePrefix": "/_/backend"
+      "routePrefix": "/_/backend",
+      "maxDuration": 60
     }
   }
 }
