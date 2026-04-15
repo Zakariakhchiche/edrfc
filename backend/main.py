@@ -301,15 +301,8 @@ async def search_pappers(query: str = "", par_page: str = "10", **filters):
     # Merge explicit filters
     args.update(filters)
     result = await call_pappers_mcp("recherche-entreprises", args)
+    print(f"[search_pappers] result type={type(result).__name__}, keys={list(result.keys()) if isinstance(result, dict) else 'N/A'}, sample={str(result)[:200] if result else 'None'}")
     if result:
-        # Extract text content from MCP response
-        if isinstance(result, dict) and "content" in result:
-            for block in result["content"]:
-                if block.get("type") == "text":
-                    try:
-                        return json.loads(block["text"])
-                    except json.JSONDecodeError:
-                        return {"raw": block["text"]}
         return result
     return {"results": [], "message": "Pappers MCP non disponible"}
 
@@ -1711,8 +1704,11 @@ async def copilot_query(q: str = Query(...)):
     if wants_pappers and PAPPERS_MCP_URL:
         try:
             pappers_data = await search_pappers(**pappers_filters)
-            if isinstance(pappers_data, dict) and "resultats" in pappers_data:
-                resultats = pappers_data["resultats"][:10]
+            print(f"[Copilot] Pappers response type={type(pappers_data).__name__}, keys={list(pappers_data.keys()) if isinstance(pappers_data, dict) else 'N/A'}")
+            # Handle both "resultats" (Pappers native) and "results" key formats
+            resultats_key = "resultats" if isinstance(pappers_data, dict) and "resultats" in pappers_data else "results" if isinstance(pappers_data, dict) and "results" in pappers_data else None
+            if isinstance(pappers_data, dict) and resultats_key:
+                resultats = pappers_data[resultats_key][:10]
                 total = pappers_data.get("total", 0)
                 pappers_lines = [f"\nPappers ({total} resultats, 10 affiches):"]
                 for r in resultats:
