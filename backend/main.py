@@ -2497,29 +2497,62 @@ async def refresh_targets():
 
 @app.get("/api/debug-mcp")
 async def debug_mcp():
-    """Debug endpoint: test MCP Pappers connection and return raw response."""
+    """Debug endpoint: test MCP Pappers connection step by step."""
     if not PAPPERS_MCP_URL:
-        return {"error": "PAPPERS_MCP_URL not set"}
+        return {"error": "PAPPERS_MCP_URL not set", "url_len": 0}
+    steps = []
+    steps.append({"step": "url", "url_len": len(PAPPERS_MCP_URL), "url_prefix": PAPPERS_MCP_URL[:30]})
     try:
         async with httpx.AsyncClient(timeout=90) as client:
-            # Step 1: Initialize
-            ok = await _ensure_mcp_session(client)
-            if not ok:
-                return {"error": "MCP initialize failed", "session": _mcp_session_id}
-            # Step 2: Simple search
-            result = await _mcp_post(client, "tools/call", {
-                "name": "recherche-entreprises",
-                "arguments": {"nom_entreprise": "Capgemini", "par_page": "2"},
-            }, msg_id=2)
-            return {
-                "session": _mcp_session_id,
-                "raw_result_type": type(result).__name__,
-                "raw_result_keys": list(result.keys()) if isinstance(result, dict) else None,
-                "raw_result_sample": str(result)[:1000] if result else None,
-                "extracted": str(_extract_mcp_content(result))[:1000] if result else None,
+            # Step 1: Raw initialize POST
+            headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+            init_body = {
+                "jsonrpc": "2.0", "id": 0, "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "edrfc-debug", "version": "1.0"},
+                },
             }
+            resp = await client.post(PAPPERS_MCP_URL, headers=headers, json=init_body)
+            steps.append({
+                "step": "initialize",
+                "status": resp.status_code,
+                "content_type": resp.headers.get("content-type", ""),
+                "session_id": resp.headers.get("mcp-session-id", ""),
+                "body_sample": resp.text[:500],
+            })
+            if resp.status_code != 200:
+                return {"steps": steps, "error": f"Init failed: HTTP {resp.status_code}"}
+
+            session_id = resp.headers.get("mcp-session-id", "")
+
+            # Step 2: Send initialized notification
+            notif_headers = {"Content-Type": "application/json"}
+            if session_id:
+                notif_headers["Mcp-Session-Id"] = session_id
+            resp2 = await client.post(PAPPERS_MCP_URL, headers=notif_headers,
+                json={"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
+            steps.append({"step": "notif", "status": resp2.status_code})
+
+            # Step 3: Call tools/call
+            call_headers = {"Content-Type": "application/json", "Accept": "application/json, text/event-stream"}
+            if session_id:
+                call_headers["Mcp-Session-Id"] = session_id
+            resp3 = await client.post(PAPPERS_MCP_URL, headers=call_headers, json={
+                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                "params": {"name": "recherche-entreprises", "arguments": {"nom_entreprise": "Capgemini", "par_page": "2"}},
+            })
+            steps.append({
+                "step": "tools_call",
+                "status": resp3.status_code,
+                "content_type": resp3.headers.get("content-type", ""),
+                "body_sample": resp3.text[:1000],
+            })
+            return {"steps": steps}
     except Exception as e:
-        return {"error": str(e), "session": _mcp_session_id}
+        steps.append({"step": "exception", "error": str(e)})
+        return {"steps": steps}
 
 
 if __name__ == "__main__":
