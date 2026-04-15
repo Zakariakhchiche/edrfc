@@ -153,7 +153,7 @@ export default function TargetDetail() {
   const scoringDimensions = targetData.scoring_details ? Object.entries(targetData.scoring_details) : [];
 
   return (
-    <div className="flex flex-col gap-12 w-full max-w-7xl mx-auto pb-32 pt-6 px-4 relative">
+    <div className="flex flex-col gap-6 sm:gap-8 lg:gap-12 w-full max-w-7xl mx-auto pb-32 pt-6 px-4 relative">
       {/* Toast Notification */}
       <AnimatePresence>
         {notification && (
@@ -219,7 +219,7 @@ export default function TargetDetail() {
         {/* Left Column - Origination Card */}
         <div className="lg:col-span-4 flex flex-col gap-8">
           {/* Score + Financials Card */}
-          <div className="p-10 rounded-[3rem] bg-black/40 border border-indigo-500/20 relative overflow-hidden group shadow-2xl backdrop-blur-3xl">
+          <div className="p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[3rem] bg-black/40 border border-indigo-500/20 relative overflow-hidden group shadow-2xl backdrop-blur-3xl">
             <div className="absolute inset-0 bg-gradient-to-br from-indigo-600/10 via-transparent to-transparent opacity-50" />
 
             <div className="relative z-10">
@@ -238,7 +238,7 @@ export default function TargetDetail() {
               <div className="flex flex-col items-center mb-12">
                 <div className="relative">
                   <div className="flex flex-col items-center">
-                    <span className="text-7xl font-black text-white leading-none tracking-tighter mb-2">{targetData.globalScore}</span>
+                    <span className="text-5xl sm:text-6xl lg:text-7xl font-black text-white leading-none tracking-tighter mb-2">{targetData.globalScore}</span>
                     <span className="text-[10px] font-black text-indigo-400/60 uppercase tracking-[0.4em]">Score Global</span>
                   </div>
                 </div>
@@ -436,7 +436,7 @@ export default function TargetDetail() {
         {/* Right Column - Deep Dive */}
         <div className="lg:col-span-8 flex flex-col gap-10">
            {/* Strategic Thesis */}
-           <section className="p-12 rounded-[4rem] bg-white/[0.02] border border-white/10 relative overflow-hidden group hover:border-indigo-500/30 transition-all">
+           <section className="p-6 sm:p-8 lg:p-12 rounded-[2rem] sm:rounded-[3rem] lg:rounded-[4rem] bg-white/[0.02] border border-white/10 relative overflow-hidden group hover:border-indigo-500/30 transition-all">
               <div className="absolute top-0 right-10 bottom-0 w-1/3 bg-gradient-to-l from-indigo-600/5 to-transparent skew-x-12" />
               <h2 className="text-xs font-black uppercase tracking-[0.4em] text-gray-500 mb-10 flex items-center gap-4">
                  <span className="w-10 h-px bg-white/10" /> 01. These Strategique
@@ -454,7 +454,7 @@ export default function TargetDetail() {
 
            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
               {/* Conviction Indicators / Signals */}
-              <section className="p-12 rounded-[4rem] bg-white/[0.02] border border-white/10">
+              <section className="p-6 sm:p-8 lg:p-12 rounded-[2rem] sm:rounded-[3rem] lg:rounded-[4rem] bg-white/[0.02] border border-white/10">
                  <h2 className="text-xs font-black uppercase tracking-[0.4em] text-gray-500 mb-10 flex items-center gap-4">
                     <Radio size={16} /> 02. Indicateurs de Conviction
                  </h2>
@@ -508,7 +508,7 @@ export default function TargetDetail() {
               </section>
 
               {/* Strategic Activation */}
-              <section className="p-12 rounded-[4rem] bg-indigo-600 text-white shadow-2xl relative overflow-hidden group">
+              <section className="p-6 sm:p-8 lg:p-12 rounded-[2rem] sm:rounded-[3rem] lg:rounded-[4rem] bg-indigo-600 text-white shadow-2xl relative overflow-hidden group">
                  <div className="absolute -top-10 -right-10 opacity-10 group-hover:scale-110 transition-transform duration-700">
                     <Crosshair size={120} />
                  </div>

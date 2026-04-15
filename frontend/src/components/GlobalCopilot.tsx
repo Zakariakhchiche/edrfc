@@ -159,7 +159,7 @@ export default function GlobalCopilot() {
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-8 right-8 w-16 h-16 rounded-[2rem] bg-indigo-600 text-white shadow-[0_20px_50px_rgba(79,70,229,0.4)] z-[50] flex items-center justify-center border border-white/20 group"
+        className="fixed bottom-[5.5rem] right-4 sm:bottom-8 sm:right-8 w-14 h-14 sm:w-16 sm:h-16 rounded-2xl sm:rounded-[2rem] bg-indigo-600 text-white shadow-[0_20px_50px_rgba(79,70,229,0.4)] z-[50] flex items-center justify-center border border-white/20 group"
       >
         {isOpen ? <X size={24} /> : <MessageSquare size={24} className="group-hover:rotate-12 transition-transform" />}
         {!isOpen && (
@@ -174,13 +174,16 @@ export default function GlobalCopilot() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             className={`
-              fixed right-8 z-[100] bg-[#0A0A0A]/95 backdrop-blur-3xl border border-white/10 rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden
-              ${isMinimized ? "bottom-32 w-80 h-20" : "bottom-32 w-[450px] h-[650px]"}
+              fixed z-[100] bg-[#0A0A0A]/95 lg:backdrop-blur-3xl border border-white/10 shadow-[0_30px_100px_rgba(0,0,0,0.8)] flex flex-col overflow-hidden
+              ${isMinimized
+                ? "bottom-[5.5rem] sm:bottom-32 right-4 sm:right-8 w-72 sm:w-80 h-20 rounded-2xl sm:rounded-[3rem]"
+                : "bottom-16 right-0 left-0 h-[calc(100vh-8rem)] sm:bottom-32 sm:right-8 sm:left-auto sm:h-[600px] lg:h-[650px] sm:w-[420px] lg:w-[450px] rounded-t-2xl sm:rounded-[3rem]"
+              }
               transition-all duration-500 ease-in-out
             `}
           >
             {/* Header */}
-            <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+            <div className="p-4 sm:p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
               <div className="flex items-center gap-4">
                 <div className="w-10 h-10 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
                   <Sparkles size={20} />
@@ -214,7 +217,7 @@ export default function GlobalCopilot() {
               <>
                 <div
                   ref={scrollRef}
-                  className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar"
+                  className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6 custom-scrollbar"
                 >
                   {messages.length === 0 ? (
                     <div className="h-full flex flex-col items-center justify-center opacity-40 text-center space-y-4 px-10">
@@ -282,9 +285,9 @@ export default function GlobalCopilot() {
                   )}
                 </div>
 
-                {/* Suggestions Chips - Show when few messages */}
+                {/* Suggestions Chips - Show when few messages, hidden on small mobile */}
                 {messages.length < 3 && (
-                   <div className="px-6 py-2 flex gap-2 overflow-x-auto scrollbar-hide">
+                   <div className="hidden sm:flex px-6 py-2 gap-2 overflow-x-auto scrollbar-hide">
                       {[
                         "Top 5 cibles",
                         "Fondateurs > 60 ans",
@@ -307,7 +310,7 @@ export default function GlobalCopilot() {
                 )}
 
                 {/* Input Area */}
-                <div className="p-6 bg-white/[0.02] border-t border-white/10">
+                <div className="p-4 sm:p-6 bg-white/[0.02] border-t border-white/10">
                   <form
                     onSubmit={handleSend}
                     className="relative"
@@ -335,7 +338,7 @@ export default function GlobalCopilot() {
                       <Send size={18} />
                     </button>
                   </form>
-                  <div className="mt-4 flex items-center justify-between">
+                  <div className="mt-4 hidden sm:flex items-center justify-between">
                      <div className="flex items-center gap-2 text-[10px] text-gray-600 font-black uppercase tracking-widest">
                         <Terminal size={12} /> Contexte: Actif
                      </div>

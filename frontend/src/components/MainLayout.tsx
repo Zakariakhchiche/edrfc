@@ -5,6 +5,7 @@ import { Menu, Zap } from "lucide-react";
 import Sidebar from "@/components/Sidebar";
 import { CommandPalette } from "@/components/CommandPalette";
 import GlobalCopilot from "@/components/GlobalCopilot";
+import BottomTabBar from "@/components/layout/BottomTabBar";
 
 export default function MainLayout({
   children,
@@ -43,7 +44,7 @@ export default function MainLayout({
           <div className="absolute bottom-0 right-[20%] w-[20%] h-[20%] rounded-full bg-indigo-500/5 blur-[100px]" />
         </div>
         
-        <div className="flex-1 p-4 md:p-8">
+        <div className="flex-1 p-4 md:p-8 pb-20 lg:pb-8">
           {children}
         </div>
 
@@ -62,6 +63,7 @@ export default function MainLayout({
       <div className="print:hidden">
         <CommandPalette />
         <GlobalCopilot />
+        <BottomTabBar />
       </div>
     </>
   );

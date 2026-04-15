@@ -1,0 +1,36 @@
+{
+  "name": "EdRCF 6.0 | AI Origination Platform",
+  "short_name": "EdRCF",
+  "description": "Plateforme d'origination M&A - Edmond de Rothschild Corporate Finance",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#050505",
+  "theme_color": "#050505",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Pipeline M&A",
+      "url": "/pipeline",
+      "description": "Gestion du pipeline d'origination"
+    },
+    {
+      "name": "Signaux Marche",
+      "url": "/signals",
+      "description": "Flux de signaux en temps reel"
+    }
+  ]
+}

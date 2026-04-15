@@ -99,7 +99,7 @@ export default function ReportPage() {
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-4xl bg-white text-black p-10 md:p-20 shadow-none flex flex-col gap-12 print:rounded-none overflow-hidden"
+        className="w-full max-w-4xl bg-white text-black p-6 sm:p-10 md:p-20 shadow-none flex flex-col gap-8 sm:gap-12 print:rounded-none overflow-hidden"
       >
         {/* Document Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start border-b-8 border-black pb-12 gap-8">
@@ -172,7 +172,7 @@ export default function ReportPage() {
         </section>
 
         {/* 02. Analysis */}
-        <section className="bg-black text-white p-12 rounded-[3.5rem] relative overflow-hidden shadow-2xl">
+        <section className="bg-black text-white p-6 sm:p-8 lg:p-12 rounded-[2rem] sm:rounded-[3rem] lg:rounded-[3.5rem] relative overflow-hidden shadow-2xl">
            <div className="absolute top-0 right-0 p-12 opacity-10">
               <Activity size={120} />
            </div>

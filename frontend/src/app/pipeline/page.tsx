@@ -130,7 +130,7 @@ export default function PipelinePage() {
   if (!isClient) return null;
 
   return (
-    <div className="flex flex-col gap-10 w-full max-w-full mx-auto h-[calc(100vh-8rem)] py-4 overflow-hidden relative">
+    <div className="flex flex-col gap-6 sm:gap-8 lg:gap-10 w-full max-w-full mx-auto h-[calc(100vh-8rem)] py-4 overflow-hidden relative pb-20 lg:pb-0">
       <AnimatePresence>
         {notification && (
           <motion.div
@@ -178,7 +178,7 @@ export default function PipelinePage() {
              {columns.map((column) => {
               const colors = STAGE_COLORS[column.color] || STAGE_COLORS.indigo;
               return (
-              <div key={column.id} className="w-[340px] flex flex-col h-full bg-black/40 rounded-[3rem] border border-white/10 shadow-2xl overflow-hidden backdrop-blur-3xl group/col shrink-0">
+              <div key={column.id} className="w-[280px] sm:w-[300px] lg:w-[340px] flex flex-col h-full bg-black/40 rounded-[2rem] sm:rounded-[2.5rem] lg:rounded-[3rem] border border-white/10 shadow-2xl overflow-hidden backdrop-blur-3xl group/col shrink-0">
 
                 <div className="p-8 pb-5 flex items-center justify-between">
                   <div className="flex items-center gap-4">
@@ -206,7 +206,7 @@ export default function PipelinePage() {
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              className={`group p-8 rounded-[2.5rem] bg-white/[0.03] border border-white/10 ${colors.cardHover} cursor-grab active:cursor-grabbing transition-all shadow-xl backdrop-blur-2xl relative overflow-hidden
+                              className={`group p-5 sm:p-6 lg:p-8 rounded-[1.5rem] sm:rounded-[2rem] lg:rounded-[2.5rem] bg-white/[0.03] border border-white/10 ${colors.cardHover} cursor-grab active:cursor-grabbing transition-all shadow-xl backdrop-blur-2xl relative overflow-hidden
                                 ${snapshot.isDragging ? "rotate-2 scale-[1.05] shadow-[0_40px_80px_rgba(0,0,0,0.8)] !border-indigo-500/60 !bg-indigo-500/10 z-[1000]" : ""}
                               `}
                             >
@@ -278,7 +278,7 @@ export default function PipelinePage() {
       <motion.div
         initial={{ y: 50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="fixed bottom-10 left-1/2 -translate-x-1/2 flex gap-12 px-10 py-5 rounded-[2.5rem] bg-black/60 border border-white/10 backdrop-blur-3xl shadow-2xl z-50 items-center ring-1 ring-white/10"
+        className="fixed bottom-[5.5rem] lg:bottom-10 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 flex flex-wrap justify-center gap-4 sm:gap-6 lg:gap-12 px-6 sm:px-10 py-4 sm:py-5 rounded-2xl sm:rounded-[2.5rem] bg-black/60 border border-white/10 backdrop-blur-3xl shadow-2xl z-50 items-center ring-1 ring-white/10"
       >
         <div className="flex items-center gap-4">
           <Activity size={20} className="text-indigo-400" />

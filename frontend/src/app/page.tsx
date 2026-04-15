@@ -323,12 +323,12 @@ export default function Home() {
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.2 + idx * 0.1 }}
                     key={target.id}
-                    className="group p-10 rounded-[3rem] bg-black/40 border border-white/10 hover:border-indigo-500/40 transition-all cursor-pointer relative overflow-hidden backdrop-blur-3xl shadow-2xl active:scale-[0.99]"
+                    className="group p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[3rem] bg-black/40 border border-white/10 hover:border-indigo-500/40 transition-all cursor-pointer relative overflow-hidden backdrop-blur-3xl shadow-2xl active:scale-[0.99]"
                   >
                     <div className="flex justify-between items-start relative z-10 gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-5 mb-5">
-                          <div className="w-16 h-16 rounded-[1.5rem] bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 group-hover:text-indigo-400 group-hover:bg-indigo-500/10 group-hover:border-indigo-500/30 transition-all shadow-xl">
+                          <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-xl sm:rounded-[1.5rem] bg-white/5 border border-white/10 flex items-center justify-center text-gray-400 group-hover:text-indigo-400 group-hover:bg-indigo-500/10 group-hover:border-indigo-500/30 transition-all shadow-xl">
                             <Building size={28} />
                           </div>
                           <div>
@@ -365,7 +365,7 @@ export default function Home() {
                       </div>
 
                       <div className="flex flex-col items-end shrink-0">
-                        <span className="text-7xl font-black text-white leading-none tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-800">
+                        <span className="text-5xl sm:text-6xl lg:text-7xl font-black text-white leading-none tracking-tighter bg-clip-text text-transparent bg-gradient-to-b from-white to-gray-800">
                           {target.globalScore}
                         </span>
                         <span className="text-[10px] uppercase tracking-[0.4em] text-indigo-400/80 font-black mt-3">
@@ -426,7 +426,7 @@ export default function Home() {
         {/* Intelligence Sidebar */}
         <div className="lg:col-span-4 flex flex-col gap-10 sticky top-4 min-w-0 overflow-hidden">
           {/* ── Distribution par Seuil ──────────────────────────── */}
-          <div className="p-10 rounded-[3rem] bg-black/40 border border-white/10 backdrop-blur-3xl shadow-2xl">
+          <div className="p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[3rem] bg-black/40 border border-white/10 backdrop-blur-3xl shadow-2xl">
             <div className="flex items-center justify-between mb-10">
               <h2 className="text-[11px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-3">
                 <BarChart3 size={18} className="text-indigo-400" /> Distribution par Seuil
@@ -454,7 +454,7 @@ export default function Home() {
           </div>
 
           {/* ── Volatilité Sectorielle ─────────────────────────── */}
-          <div className="p-10 rounded-[3rem] bg-black/40 border border-white/10 backdrop-blur-3xl shadow-2xl">
+          <div className="p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[3rem] bg-black/40 border border-white/10 backdrop-blur-3xl shadow-2xl">
             <div className="flex items-center justify-between mb-10">
               <h2 className="text-[11px] font-black text-white uppercase tracking-[0.3em] flex items-center gap-3">
                 <Activity size={18} className="text-indigo-400" /> Volatilité Sectorielle
@@ -527,7 +527,7 @@ export default function Home() {
           <motion.button
             whileHover={{ y: -5 }}
             onClick={() => window.dispatchEvent(new CustomEvent("toggle-copilot"))}
-            className="relative p-10 rounded-[3rem] bg-indigo-600 text-left shadow-[0_30px_60px_rgba(79,70,229,0.4)] border border-indigo-400 hover:bg-indigo-500 transition-all group overflow-hidden"
+            className="relative p-6 sm:p-8 lg:p-10 rounded-[2rem] sm:rounded-[3rem] bg-indigo-600 text-left shadow-[0_30px_60px_rgba(79,70,229,0.4)] border border-indigo-400 hover:bg-indigo-500 transition-all group overflow-hidden"
           >
             <div className="absolute top-0 right-0 p-10 opacity-10 group-hover:scale-125 group-hover:rotate-6 transition-all duration-700">
               <MessageSquare size={160} />
